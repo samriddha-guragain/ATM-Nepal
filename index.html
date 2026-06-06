@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATM-Nepal — Himalayan Atmosphere Model</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
+  :root {
+    --bg:#0d1117;--bg2:#111820;--bg3:#151e28;--panel:#1a2535;--panel2:#1f2d3d;
+    --border:rgba(180,140,80,0.15);--border2:rgba(180,140,80,0.08);
+    --amber:#c8922a;--amber-light:#e8b84b;--amber-dim:rgba(200,146,42,0.4);
+    --warm-white:#e8dcc8;--sky-low:#4a9e6b;--sky-high:#1a4a8a;
+    --red:#c84a3a;--green:#4a9e6b;--text:#c8c0b0;--text-dim:rgba(200,192,176,0.5);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");pointer-events:none;z-index:1000;opacity:0.4;}
+  header{padding:18px 32px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;background:linear-gradient(180deg,rgba(26,37,53,0.95)0%,rgba(17,24,32,0.8)100%);position:sticky;top:0;z-index:100;backdrop-filter:blur(8px);}
+  .header-left h1{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;letter-spacing:0.1em;color:var(--amber-light);text-transform:uppercase;}
+  .header-left p{font-size:9px;color:var(--text-dim);letter-spacing:0.18em;margin-top:3px;text-transform:uppercase;}
+  .header-right{text-align:right;font-size:9px;color:var(--text-dim);letter-spacing:0.1em;line-height:2;text-transform:uppercase;}
+  .header-right span{color:var(--amber);}
+  .warning-bar{padding:7px 24px;background:rgba(200,74,58,0.08);border-bottom:1px solid rgba(200,74,58,0.18);font-size:9px;color:#e87a6a;letter-spacing:0.12em;text-transform:uppercase;display:none;align-items:center;gap:8px;}
+  .warning-bar.show{display:flex;}
+  .main{display:grid;grid-template-columns:1fr 320px;gap:1px;background:var(--border2);min-height:calc(100vh - 68px);}
+  .atm-column{background:var(--bg2);display:flex;flex-direction:column;}
+  .route-bar{padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--bg3);}
+  .route-label{font-size:9px;letter-spacing:0.15em;color:var(--text-dim);text-transform:uppercase;white-space:nowrap;}
+  .airport-select{background:var(--panel);border:1px solid var(--border);color:var(--warm-white);font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 10px;cursor:pointer;outline:none;flex:1;min-width:150px;transition:border-color 0.2s;}
+  .airport-select:focus{border-color:var(--amber-dim);}
+  .route-arrow{color:var(--amber);font-size:14px;}
+  .fly-btn{background:var(--amber);color:#0d1117;border:none;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:0.14em;padding:7px 18px;cursor:pointer;text-transform:uppercase;transition:background 0.2s,transform 0.1s;white-space:nowrap;}
+  .fly-btn:hover{background:var(--amber-light);}
+  .fly-btn:active{transform:scale(0.97);}
+  .viz-area{flex:1;display:grid;grid-template-columns:52px 1fr;position:relative;min-height:500px;}
+  .alt-scale{display:flex;flex-direction:column;justify-content:space-between;padding:16px 0;border-right:1px solid var(--border);background:var(--bg);}
+  .alt-tick{display:flex;align-items:center;justify-content:flex-end;padding-right:8px;position:relative;}
+  .alt-tick::after{content:'';position:absolute;right:0;width:5px;height:1px;background:rgba(180,140,80,0.2);}
+  .alt-tick span{font-size:7px;color:var(--text-dim);letter-spacing:0.04em;}
+  .sky-canvas{position:relative;overflow:hidden;cursor:crosshair;background:linear-gradient(180deg,#040a14 0%,#080f1e 8%,#0d2350 18%,#1a4a8a 38%,#2a7ab8 56%,#3a9aaa 68%,#4a9e8a 76%,#5a9e6b 87%,#4a7850 94%,#3d6040 100%);}
+  .zone-label{position:absolute;left:10px;font-size:7px;color:rgba(255,255,255,0.18);letter-spacing:0.12em;text-transform:uppercase;pointer-events:none;user-select:none;}
+  .layer-line{position:absolute;left:0;right:0;height:1px;background:rgba(255,255,255,0.05);pointer-events:none;}
+  .aircraft-marker{position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;z-index:10;pointer-events:none;}
+  .aircraft-icon{font-size:22px;filter:drop-shadow(0 0 10px rgba(232,184,75,0.7));transform:rotate(-20deg);transition:transform 0.7s cubic-bezier(0.4,0,0.2,1);}
+  .aircraft-label{background:rgba(13,17,23,0.7);border:1px solid var(--amber-dim);padding:3px 8px;font-size:9px;color:var(--amber-light);letter-spacing:0.1em;white-space:nowrap;backdrop-filter:blur(6px);}
+  .airport-marker{position:absolute;left:0;right:0;display:flex;align-items:center;padding:0 14px;gap:7px;pointer-events:none;z-index:8;}
+  .airport-dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--amber);background:var(--amber-dim);flex-shrink:0;}
+  .airport-dot.green{border-color:#4a9e6b;background:rgba(74,158,107,0.3);}
+  .airport-name-tag{font-size:9px;color:rgba(232,220,200,0.8);letter-spacing:0.1em;text-transform:uppercase;}
+  .airport-elev-tag{font-size:8px;color:var(--text-dim);margin-left:auto;padding-right:4px;}
+  .click-indicator{position:absolute;left:0;right:0;pointer-events:none;display:none;z-index:20;transition:opacity 0.4s ease;}
+  .click-indicator-line{position:absolute;left:0;right:0;height:1px;background:rgba(232,184,75,0.45);}
+  .click-indicator-label{position:absolute;right:12px;transform:translateY(-50%);background:rgba(13,17,23,0.75);border:1px solid rgba(200,146,42,0.45);padding:2px 8px;font-size:9px;color:var(--amber-light);letter-spacing:0.1em;backdrop-filter:blur(6px);}
+  .physics-panel{padding:18px 24px;border-top:1px solid var(--border);background:var(--bg3);}
+  .panel-title{font-size:8px;letter-spacing:0.22em;color:var(--text-dim);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+  .panel-title::after{content:'';flex:1;height:1px;background:var(--border);}
+  .physics-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  .physics-item{background:var(--panel);border:1px solid var(--border2);padding:10px 12px;transition:border-color 0.3s;}
+  .physics-item:hover{border-color:var(--border);}
+  .physics-item-label{font-size:7px;color:var(--text-dim);letter-spacing:0.14em;text-transform:uppercase;margin-bottom:5px;}
+  .physics-item-value{font-size:16px;font-weight:300;color:var(--warm-white);line-height:1;transition:color 0.4s;}
+  .physics-item-value.warn{color:#e8a84b;}
+  .physics-item-value.danger{color:var(--red);}
+  .physics-item-value.good{color:var(--green);}
+  .physics-item-unit{font-size:7px;color:var(--text-dim);margin-top:3px;}
+  .sidebar{background:var(--bg2);display:flex;flex-direction:column;border-left:1px solid var(--border2);overflow-y:auto;}
+  .sidebar-section{padding:18px;border-bottom:1px solid var(--border2);}
+  .sidebar-title{font-size:8px;letter-spacing:0.22em;color:var(--text-dim);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+  .sidebar-title::after{content:'';flex:1;height:1px;background:var(--border2);}
+  .slider-header{display:flex;justify-content:space-between;margin-bottom:10px;font-size:9px;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;}
+  .slider-header span{color:var(--amber-light);}
+  input[type=range]{width:100%;-webkit-appearance:none;height:2px;background:var(--panel2);outline:none;cursor:pointer;}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;background:var(--amber);border-radius:50%;cursor:pointer;box-shadow:0 0 8px var(--amber-dim);}
+  .airport-list{display:flex;flex-direction:column;gap:1px;}
+  .airport-item{display:flex;align-items:center;padding:8px 10px;cursor:pointer;border:1px solid transparent;transition:all 0.15s;gap:10px;}
+  .airport-item:hover{background:var(--panel);border-color:var(--border2);}
+  .airport-item.active{background:rgba(200,146,42,0.07);border-color:var(--amber-dim);}
+  .ap-icao{font-size:10px;font-weight:500;color:var(--amber);letter-spacing:0.05em;width:36px;flex-shrink:0;}
+  .ap-info{flex:1;}
+  .ap-name{font-size:9px;color:var(--warm-white);margin-bottom:3px;}
+  .alt-bar-bg{height:2px;background:var(--panel2);}
+  .alt-bar-fill{height:100%;background:linear-gradient(90deg,var(--sky-low),var(--sky-high));}
+  .ap-elev{font-size:8px;color:var(--text-dim);}
+  .compare-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border2);font-size:9px;}
+  .compare-row:last-child{border-bottom:none;}
+  .compare-label{color:var(--text-dim);font-size:8px;letter-spacing:0.08em;}
+  .compare-val{color:var(--amber-light);}
+  .compare-val.neutral{color:var(--warm-white);}
+  .layer-legend{display:flex;flex-direction:column;gap:7px;}
+  .layer-item{display:flex;align-items:center;gap:9px;font-size:9px;color:var(--text-dim);}
+  .layer-swatch{width:22px;height:7px;border-radius:1px;flex-shrink:0;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+  .live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;display:inline-block;margin-right:5px;flex-shrink:0;}
+  footer{padding:10px 32px;border-top:1px solid var(--border2);display:flex;justify-content:space-between;font-size:8px;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;background:var(--bg);flex-wrap:wrap;gap:8px;}
+  footer a{color:rgba(200,146,42,0.5);text-decoration:none;}
+  footer a:hover{color:var(--amber);}
+  @media(max-width:768px){.main{grid-template-columns:1fr;}.sidebar{border-left:none;border-top:1px solid var(--border2);}.physics-grid{grid-template-columns:repeat(2,1fr);}header{padding:14px 16px;}.route-bar{padding:12px 16px;}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>ATM-Nepal</h1>
+    <p>Himalayan Atmosphere Model &nbsp;·&nbsp; ISA Physics &nbsp;·&nbsp; Samriddha Guragain</p>
+  </div>
+  <div class="header-right">
+    <div>Jhapa, Nepal</div>
+    <div>Chandragadhi &nbsp;<span>VNCG</span></div>
+    <div id="live-time">--:--:-- UTC</div>
+  </div>
+</header>
+
+<div class="warning-bar" id="warning-bar">
+  <span>⚠</span>&nbsp; High altitude warning — significant lift and power loss above 4000m. Air density below 65% of sea level.
+</div>
+
+<div class="main">
+  <div class="atm-column">
+
+    <div class="route-bar">
+      <span class="route-label">Route</span>
+      <select class="airport-select" id="from-select">
+        <option value="VNCG">VNCG — Chandragadhi (300m)</option>
+        <option value="VNKT">VNKT — Kathmandu (1338m)</option>
+        <option value="VNPK">VNPK — Pokhara (827m)</option>
+        <option value="VNJS">VNJS — Jomsom (2749m)</option>
+        <option value="VNLK">VNLK — Lukla (2845m)</option>
+        <option value="VNNG">VNNG — Namche (3440m)</option>
+        <option value="EBC">EBC — Everest Base Camp (5364m)</option>
+        <option value="EVR">EVR — Everest Summit (8849m)</option>
+      </select>
+      <span class="route-arrow">→</span>
+      <select class="airport-select" id="to-select">
+        <option value="VNKT">VNKT — Kathmandu (1338m)</option>
+        <option value="VNCG">VNCG — Chandragadhi (300m)</option>
+        <option value="VNPK">VNPK — Pokhara (827m)</option>
+        <option value="VNJS">VNJS — Jomsom (2749m)</option>
+        <option value="VNLK">VNLK — Lukla (2845m)</option>
+        <option value="VNNG">VNNG — Namche (3440m)</option>
+        <option value="EBC">EBC — Everest Base Camp (5364m)</option>
+        <option value="EVR">EVR — Everest Summit (8849m)</option>
+      </select>
+      <button class="fly-btn" onclick="startFlight()">▶ Fly Route</button>
+    </div>
+
+    <div class="viz-area">
+      <div class="alt-scale" id="alt-scale"></div>
+      <div class="sky-canvas" id="sky-canvas">
+        <div class="zone-label" style="top:4%">Extreme altitude</div>
+        <div class="zone-label" style="top:33%">High altitude</div>
+        <div class="zone-label" style="top:57%">Mid altitude</div>
+        <div class="zone-label" style="top:80%">Lowlands</div>
+        <div class="layer-line" style="top:11%"></div>
+        <div class="layer-line" style="top:32%"></div>
+        <div class="layer-line" style="top:55%"></div>
+        <div class="layer-line" style="top:72%"></div>
+        <div class="layer-line" style="top:87%"></div>
+        <div class="aircraft-marker" id="aircraft" style="top:97%;">
+          <div class="aircraft-icon" id="aircraft-icon">✈</div>
+          <div class="aircraft-label" id="aircraft-label">300m ASL</div>
+        </div>
+        <div class="airport-marker" id="dep-marker" style="top:97%;">
+          <div class="airport-dot"></div>
+          <div class="airport-name-tag" id="dep-name">VNCG</div>
+          <div class="airport-elev-tag" id="dep-elev">300m</div>
+        </div>
+        <div class="airport-marker" id="arr-marker" style="top:88%;">
+          <div class="airport-dot green"></div>
+          <div class="airport-name-tag" id="arr-name">VNKT</div>
+          <div class="airport-elev-tag" id="arr-elev">1338m</div>
+        </div>
+        <div class="click-indicator" id="click-indicator">
+          <div class="click-indicator-line"></div>
+          <div class="click-indicator-label" id="click-alt-label"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="physics-panel">
+      <div class="panel-title"><span class="live-dot"></span>Atmospheric Parameters — Current Altitude</div>
+      <div class="physics-grid">
+        <div class="physics-item">
+          <div class="physics-item-label">Altitude</div>
+          <div class="physics-item-value" id="p-alt">300</div>
+          <div class="physics-item-unit">metres ASL</div>
+        </div>
+        <div class="physics-item">
+          <div class="physics-item-label">Pressure</div>
+          <div class="physics-item-value" id="p-pres">977.2</div>
+          <div class="physics-item-unit">hPa</div>
+        </div>
+        <div class="physics-item">
+          <div class="physics-item-label">Temperature</div>
+          <div class="physics-item-value" id="p-temp">13.1</div>
+          <div class="physics-item-unit">°C ISA</div>
+        </div>
+        <div class="physics-item">
+          <div class="physics-item-label">Air Density</div>
+          <div class="physics-item-value" id="p-dens">1.190</div>
+          <div class="physics-item-unit">kg/m³</div>
+        </div>
+        <div class="physics-item">
+          <div class="physics-item-label">Lift Loss</div>
+          <div class="physics-item-value good" id="p-lift">3.2</div>
+          <div class="physics-item-unit">% vs sea level</div>
+        </div>
+        <div class="physics-item">
+          <div class="physics-item-label">Engine Loss</div>
+          <div class="physics-item-value good" id="p-eng">3.1</div>
+          <div class="physics-item-unit">% power</div>
+        </div>
+        <div class="physics-item">
+          <div class="physics-item-label">Speed of Sound</div>
+          <div class="physics-item-value" id="p-sos">334</div>
+          <div class="physics-item-unit">m/s</div>
+        </div>
+        <div class="physics-item">
+          <div class="physics-item-label">Density Ratio σ</div>
+          <div class="physics-item-value" id="p-sigma">0.972</div>
+          <div class="physics-item-unit">ρ / ρ₀</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Manual Altitude</div>
+      <div class="slider-header">Drag to explore &nbsp;<span id="slider-val">300m</span></div>
+      <input type="range" min="0" max="8849" value="300" id="alt-slider" oninput="updateFromSlider(this.value)">
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Nepal Airports</div>
+      <div class="airport-list" id="airport-list"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Route Comparison</div>
+      <div class="compare-row"><span class="compare-label">Departure</span><span class="compare-val neutral" id="c-dep">VNCG / 300m</span></div>
+      <div class="compare-row"><span class="compare-label">Arrival</span><span class="compare-val" id="c-arr">VNKT / 1338m</span></div>
+      <div class="compare-row"><span class="compare-label">Alt change</span><span class="compare-val" id="c-gain">+1038m</span></div>
+      <div class="compare-row"><span class="compare-label">Density Δ</span><span class="compare-val" id="c-dens">—</span></div>
+      <div class="compare-row"><span class="compare-label">Lift loss Δ</span><span class="compare-val" id="c-lift">—</span></div>
+      <div class="compare-row"><span class="compare-label">Temp change</span><span class="compare-val" id="c-temp">—</span></div>
+      <div class="compare-row"><span class="compare-label">Sound Δ</span><span class="compare-val" id="c-sos">—</span></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-title">Atmosphere Zones</div>
+      <div class="layer-legend">
+        <div class="layer-item"><div class="layer-swatch" style="background:linear-gradient(90deg,#3d6b45,#4a9e6b)"></div>Lowlands (0–1000m)</div>
+        <div class="layer-item"><div class="layer-swatch" style="background:linear-gradient(90deg,#4a9e8a,#2a7ab8)"></div>Hills (1000–3500m)</div>
+        <div class="layer-item"><div class="layer-swatch" style="background:linear-gradient(90deg,#2a7ab8,#1a4a8a)"></div>High Alt (3500–6000m)</div>
+        <div class="layer-item"><div class="layer-swatch" style="background:linear-gradient(90deg,#1a4a8a,#040a14)"></div>Extreme (6000–8849m)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>Built by someone who learned to ride a bike on Chandragadhi runway.</span>
+  <span>ISA Standard Atmosphere &nbsp;·&nbsp; <a href="https://github.com/samriddha-guragain" target="_blank">github.com/samriddha-guragain</a></span>
+</footer>
+
+<script>
+const AIRPORTS=[
+  {icao:'VNCG',name:'Chandragadhi',city:'Jhapa',elev:300},
+  {icao:'VNKT',name:'Tribhuvan Intl',city:'Kathmandu',elev:1338},
+  {icao:'VNPK',name:'Pokhara',city:'Pokhara',elev:827},
+  {icao:'VNJS',name:'Jomsom',city:'Mustang',elev:2749},
+  {icao:'VNLK',name:'Tenzing-Hillary',city:'Lukla',elev:2845},
+  {icao:'VNNG',name:'Namche',city:'Solukhumbu',elev:3440},
+  {icao:'EBC',name:'Everest Base Camp',city:'Khumbu',elev:5364},
+  {icao:'EVR',name:'Everest Summit',city:'Sagarmatha',elev:8849},
+];
+const MAX_ALT=8849;
+
+function isa(h){
+  const T0=288.15,P0=101325,rho0=1.225,L=0.0065,R=287.05,g=9.80665;
+  let T,P;
+  if(h<=11000){T=T0-L*h;P=P0*Math.pow(T/T0,g/(L*R));}
+  else{const T11=T0-L*11000;const P11=P0*Math.pow(T11/T0,g/(L*R));T=T11;P=P11*Math.exp(-g*(h-11000)/(R*T11));}
+  const rho=P/(R*T),sigma=rho/rho0;
+  return{T:T-273.15,P:P/100,rho,sigma,liftLoss:(1-sigma)*100,engLoss:(1-Math.pow(sigma,0.7))*100,sos:Math.sqrt(1.4*R*T)};
+}
+
+function altToTop(h){return 5+(1-h/MAX_ALT)*90;}
+
+function positionAircraft(h){
+  document.getElementById('aircraft').style.top=altToTop(h)+'%';
+  document.getElementById('aircraft-label').textContent=Math.round(h)+'m ASL';
+}
+
+function setTilt(dir){
+  const icon=document.getElementById('aircraft-icon');
+  if(dir==='up')icon.style.transform='rotate(-75deg)';
+  else if(dir==='down')icon.style.transform='rotate(45deg)';
+  else icon.style.transform='rotate(-20deg)';
+}
+
+function updatePhysics(h){
+  const a=isa(h);
+  document.getElementById('p-alt').textContent=Math.round(h);
+  document.getElementById('p-pres').textContent=a.P.toFixed(1);
+  document.getElementById('p-temp').textContent=a.T.toFixed(1);
+  document.getElementById('p-dens').textContent=a.rho.toFixed(3);
+  document.getElementById('p-sos').textContent=Math.round(a.sos);
+  document.getElementById('p-sigma').textContent=a.sigma.toFixed(3);
+  const lEl=document.getElementById('p-lift');
+  lEl.textContent=a.liftLoss.toFixed(1);
+  lEl.className='physics-item-value '+(a.liftLoss<10?'good':a.liftLoss<30?'warn':'danger');
+  const eEl=document.getElementById('p-eng');
+  eEl.textContent=a.engLoss.toFixed(1);
+  eEl.className='physics-item-value '+(a.engLoss<10?'good':a.engLoss<30?'warn':'danger');
+  document.getElementById('warning-bar').classList.toggle('show',h>4000);
+}
+
+function updateFromSlider(val){
+  val=parseInt(val);
+  if(flightInterval){clearInterval(flightInterval);flightInterval=null;}
+  document.getElementById('slider-val').textContent=val+'m';
+  updatePhysics(val);positionAircraft(val);setTilt('level');
+}
+
+function buildAltScale(){
+  const scale=document.getElementById('alt-scale');
+  [8849,7000,6000,5000,4000,3000,2000,1000,300].forEach(alt=>{
+    const d=document.createElement('div');d.className='alt-tick';
+    d.innerHTML=`<span>${alt>=1000?(alt/1000).toFixed(0)+'k':alt}</span>`;
+    scale.appendChild(d);
+  });
+}
+
+function buildAirportList(){
+  const list=document.getElementById('airport-list');
+  AIRPORTS.forEach(ap=>{
+    const pct=(ap.elev/MAX_ALT*100).toFixed(0);
+    const el=document.createElement('div');el.className='airport-item';el.id='ap-'+ap.icao;
+    el.innerHTML=`<span class="ap-icao">${ap.icao}</span><div class="ap-info"><div class="ap-name">${ap.name}</div><div class="alt-bar-bg"><div class="alt-bar-fill" style="width:${pct}%"></div></div></div><span class="ap-elev">${ap.elev}m</span>`;
+    el.onclick=()=>jumpToAirport(ap);list.appendChild(el);
+  });
+}
+
+function jumpToAirport(ap){
+  if(flightInterval){clearInterval(flightInterval);flightInterval=null;}
+  document.querySelectorAll('.airport-item').forEach(e=>e.classList.remove('active'));
+  document.getElementById('ap-'+ap.icao)?.classList.add('active');
+  updatePhysics(ap.elev);
+  document.getElementById('alt-slider').value=ap.elev;
+  document.getElementById('slider-val').textContent=ap.elev+'m';
+  positionAircraft(ap.elev);setTilt('level');
+}
+
+let flightInterval=null;
+
+function startFlight(){
+  const fromAp=AIRPORTS.find(a=>a.icao===document.getElementById('from-select').value);
+  const toAp=AIRPORTS.find(a=>a.icao===document.getElementById('to-select').value);
+  if(!fromAp||!toAp||fromAp.icao===toAp.icao)return;
+  if(flightInterval){clearInterval(flightInterval);flightInterval=null;}
+
+  updatePhysics(fromAp.elev);positionAircraft(fromAp.elev);
+  document.getElementById('alt-slider').value=fromAp.elev;
+  document.getElementById('slider-val').textContent=fromAp.elev+'m';
+  document.getElementById('dep-name').textContent=fromAp.icao;
+  document.getElementById('dep-elev').textContent=fromAp.elev+'m';
+  document.getElementById('arr-name').textContent=toAp.icao;
+  document.getElementById('arr-elev').textContent=toAp.elev+'m';
+  document.getElementById('dep-marker').style.top=altToTop(fromAp.elev)+'%';
+  document.getElementById('arr-marker').style.top=altToTop(toAp.elev)+'%';
+
+  const fA=isa(fromAp.elev),tA=isa(toAp.elev),gain=toAp.elev-fromAp.elev;
+  document.getElementById('c-dep').textContent=fromAp.icao+' / '+fromAp.elev+'m';
+  document.getElementById('c-arr').textContent=toAp.icao+' / '+toAp.elev+'m';
+  document.getElementById('c-gain').textContent=(gain>=0?'+':'')+gain+'m';
+  document.getElementById('c-dens').textContent=(tA.rho-fA.rho).toFixed(3)+' kg/m³';
+  document.getElementById('c-lift').textContent=(tA.liftLoss-fA.liftLoss>=0?'+':'')+(tA.liftLoss-fA.liftLoss).toFixed(1)+'%';
+  document.getElementById('c-temp').textContent=(tA.T-fA.T).toFixed(1)+'°C';
+  document.getElementById('c-sos').textContent=(Math.round(tA.sos)-Math.round(fA.sos))+' m/s';
+
+  const climbing=toAp.elev>fromAp.elev;
+  setTilt(climbing?'up':'down');
+
+  let current=fromAp.elev;
+  const target=toAp.elev,steps=200,step=(target-current)/steps;
+  let i=0;
+
+  flightInterval=setInterval(()=>{
+    i++;current+=step;
+    if(i===40){
+      const icon=document.getElementById('aircraft-icon');
+      icon.style.transform=climbing?'rotate(-90deg)':'rotate(60deg)';
+    }else if(i===188){setTilt('level');}
+    if(i>=steps){current=target;clearInterval(flightInterval);flightInterval=null;setTilt('level');}
+    updatePhysics(current);positionAircraft(current);
+    document.getElementById('alt-slider').value=current;
+    document.getElementById('slider-val').textContent=Math.round(current)+'m';
+  },50);
+}
+
+document.getElementById('sky-canvas').addEventListener('click',function(e){
+  const rect=this.getBoundingClientRect();
+  const y=e.clientY-rect.top;
+  const altM=Math.round(MAX_ALT*(1-Math.max(0,Math.min(1,y/rect.height))));
+  if(flightInterval){clearInterval(flightInterval);flightInterval=null;}
+  updatePhysics(altM);positionAircraft(altM);setTilt('level');
+  document.getElementById('alt-slider').value=altM;
+  document.getElementById('slider-val').textContent=altM+'m';
+  const ind=document.getElementById('click-indicator');
+  ind.style.display='block';ind.style.opacity='1';ind.style.top=y+'px';
+  document.getElementById('click-alt-label').textContent=altM+'m ASL';
+  clearTimeout(window._indTimeout);
+  window._indTimeout=setTimeout(()=>{ind.style.opacity='0';setTimeout(()=>{ind.style.display='none';},400);},2000);
+});
+
+function updateClock(){
+  const n=new Date();
+  document.getElementById('live-time').textContent=[n.getUTCHours(),n.getUTCMinutes(),n.getUTCSeconds()].map(v=>String(v).padStart(2,'0')).join(':')+ ' UTC';
+}
+
+buildAltScale();buildAirportList();updatePhysics(300);positionAircraft(300);
+setInterval(updateClock,1000);updateClock();
+</script>
+</body>
+</html>
