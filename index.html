@@ -106,9 +106,8 @@
     <p>Himalayan Atmosphere Model &nbsp;·&nbsp; ISA Physics &nbsp;·&nbsp; Samriddha Guragain</p>
   </div>
   <div class="header-right">
-    <div>Jhapa, Nepal</div>
-    <div>Chandragadhi &nbsp;<span>VNCG</span></div>
     <div id="live-time">--:--:-- UTC</div>
+    <div id="live-time-npt">--:--:-- NPT</div>
   </div>
 </header>
 
@@ -262,8 +261,8 @@
 </div>
 
 <footer>
-  <span>Built by someone who learned to ride a bike on Chandragadhi runway.</span>
-  <span>ISA Standard Atmosphere &nbsp;·&nbsp; <a href="https://github.com/samriddha-guragain" target="_blank">github.com/samriddha-guragain</a></span>
+  <span>ISA Standard Atmosphere</span>
+  <span><a href="https://github.com/samriddha-guragain" target="_blank">github.com/samriddha-guragain</a></span>
 </footer>
 
 <script>
@@ -386,20 +385,29 @@ function startFlight(){
   setTilt(climbing?'up':'down');
 
   let current=fromAp.elev;
-  const target=toAp.elev,steps=200,step=(target-current)/steps;
+  const target=toAp.elev;
+  const altDiff=Math.abs(target-current);
+
+  // Scale: minimum 3s (tiny hop), maximum 12s (sea level to Everest summit)
+  // Linear scale between 0 and 8849m
+  const MIN_MS=3000, MAX_MS=12000;
+  const totalMs=MIN_MS+(altDiff/MAX_ALT)*(MAX_MS-MIN_MS);
+  const TICK=50;
+  const steps=Math.round(totalMs/TICK);
+  const stepSize=(target-current)/steps;
   let i=0;
 
   flightInterval=setInterval(()=>{
-    i++;current+=step;
-    if(i===40){
+    i++;current+=stepSize;
+    if(i===Math.round(steps*0.2)){
       const icon=document.getElementById('aircraft-icon');
       icon.style.transform=climbing?'rotate(-90deg)':'rotate(60deg)';
-    }else if(i===188){setTilt('level');}
+    }else if(i===Math.round(steps*0.9)){setTilt('level');}
     if(i>=steps){current=target;clearInterval(flightInterval);flightInterval=null;setTilt('level');}
     updatePhysics(current);positionAircraft(current);
     document.getElementById('alt-slider').value=current;
     document.getElementById('slider-val').textContent=Math.round(current)+'m';
-  },50);
+  },TICK);
 }
 
 document.getElementById('sky-canvas').addEventListener('click',function(e){
@@ -420,6 +428,11 @@ document.getElementById('sky-canvas').addEventListener('click',function(e){
 function updateClock(){
   const n=new Date();
   document.getElementById('live-time').textContent=[n.getUTCHours(),n.getUTCMinutes(),n.getUTCSeconds()].map(v=>String(v).padStart(2,'0')).join(':')+ ' UTC';
+  // NPT is UTC+5:45
+  const nptOffset=5*60+45;
+  const nptTotal=n.getUTCHours()*60+n.getUTCMinutes()+nptOffset;
+  const nptH=Math.floor(nptTotal/60)%24, nptM=nptTotal%60, nptS=n.getUTCSeconds();
+  document.getElementById('live-time-npt').textContent=[nptH,nptM,nptS].map(v=>String(v).padStart(2,'0')).join(':')+ ' NPT';
 }
 
 buildAltScale();buildAirportList();updatePhysics(300);positionAircraft(300);
